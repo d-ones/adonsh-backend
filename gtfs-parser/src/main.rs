@@ -1,20 +1,17 @@
-mod cities;
-mod tables;
+mod models;
+mod transit_authorities;
 
-use polars::frame::DataFrame;
-use polars::prelude::*;
-use tables::RouteRow;
+use anyhow::Result;
 
-fn main() {
-    let df = return_dataframe_from_file("src/boston_gtfs/routes.txt");
-    let route_rows = RouteRow::struct_array_from_dataframe(df.expect("Error converting to df"));
-    println!("{:?}", route_rows);
-}
+use crate::{models::stops::StopRow, transit_authorities::SupportedTransitAuthorities};
 
-fn return_dataframe_from_file(input_path: &str) -> PolarsResult<DataFrame> {
-    Ok(CsvReadOptions::default()
-        .try_into_reader_with_file_path(Some(input_path.into()))
-        .unwrap()
-        .finish()
-        .unwrap())
+fn main() -> Result<()> {
+    let stop_rows = StopRow::parse_file_into_structs(
+        "src/boston_gtfs/stops.txt",
+        Some(SupportedTransitAuthorities::Boston),
+    );
+    for row in stop_rows.iter() {
+        println!("{:?}", row);
+    }
+    Ok(())
 }
