@@ -7,7 +7,7 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct StopRow {
-    stop_id: String,
+    stop_id: Option<String>,
     stop_code: Option<String>,
     stop_name: Option<String>,
     stop_desc: Option<String>,
@@ -58,7 +58,7 @@ impl StopRow {
         ta: Option<SupportedTransitAuthorities>,
     ) -> Vec<StopRow> {
         let mut struct_vect: Vec<StopRow> = Vec::with_capacity(df.height());
-        let stop_id_ca = df.column("stop_id").unwrap().str().unwrap();
+        let stop_id_ca = df.column("stop_id").ok().and_then(|col| col.str().ok());
         let stop_code_ca = df.column("stop_code").ok().and_then(|col| col.str().ok());
         let stop_name_ca = df.column("stop_name").ok().and_then(|col| col.str().ok());
         let stop_desc_ca = df.column("stop_desc").ok().and_then(|col| col.str().ok());
@@ -78,7 +78,9 @@ impl StopRow {
 
         for i in 0..df.height() {
             struct_vect.push(StopRow {
-                stop_id: stop_id_ca.get(i).unwrap().to_string(),
+                stop_id: stop_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
                 stop_code: stop_code_ca
                     .as_ref()
                     .and_then(|ca| ca.get(i).map(|s| s.to_string())),

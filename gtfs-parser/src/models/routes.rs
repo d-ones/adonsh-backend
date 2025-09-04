@@ -7,7 +7,7 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct RouteRow {
-    route_id: String,
+    route_id: Option<String>,
     agency_id: Option<i64>,
     route_short_name: Option<String>,
     line_id: Option<String>,
@@ -57,7 +57,7 @@ impl RouteRow {
         ta: Option<SupportedTransitAuthorities>,
     ) -> Vec<RouteRow> {
         let mut struct_vect: Vec<RouteRow> = Vec::with_capacity(df.height());
-        let route_id_ca = df.column("route_id").unwrap().str().unwrap();
+        let route_id_ca = df.column("route_id").ok().and_then(|col| col.str().ok());
         let agency_id_ca = df.column("agency_id").ok().and_then(|col| col.i64().ok());
         let route_short_name_ca = df
             .column("route_short_name")
@@ -75,7 +75,9 @@ impl RouteRow {
 
         for i in 0..df.height() {
             struct_vect.push(RouteRow {
-                route_id: route_id_ca.get(i).unwrap().to_string(),
+                route_id: route_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
                 agency_id: agency_id_ca.as_ref().and_then(|ca| ca.get(i)),
                 route_short_name: route_short_name_ca
                     .as_ref()

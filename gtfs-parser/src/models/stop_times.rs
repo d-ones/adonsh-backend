@@ -7,11 +7,10 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct StopTimeRow {
-    trip_id: String,
+    trip_id: Option<String>,
     arrival_time: Option<NaiveTime>,
     departure_time: Option<NaiveTime>,
-    stop_id: String,
-    // This is a required field for the composite key, but broken somehow
+    stop_id: Option<String>,
     stop_sequence: Option<u32>,
     stop_headsign: Option<String>,
     timepoint: Option<u8>,
@@ -57,8 +56,8 @@ impl StopTimeRow {
     ) -> Vec<StopTimeRow> {
         let mut struct_vect: Vec<StopTimeRow> = Vec::with_capacity(df.height());
 
-        let trip_id_ca = df.column("trip_id").unwrap().str().unwrap();
-        let stop_id_ca = df.column("stop_id").unwrap().str().unwrap();
+        let trip_id_ca = df.column("trip_id").ok().and_then(|col| col.u32().ok());
+        let stop_id_ca = df.column("stop_id").ok().and_then(|col| col.u32().ok());
         let stop_sequence_ca = df
             .column("stop_sequence")
             .ok()
@@ -79,8 +78,12 @@ impl StopTimeRow {
 
         for i in 0..df.height() {
             struct_vect.push(StopTimeRow {
-                trip_id: trip_id_ca.get(i).unwrap().to_string(),
-                stop_id: stop_id_ca.get(i).unwrap().to_string(),
+                trip_id: trip_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
+                stop_id: stop_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
                 stop_sequence: stop_sequence_ca.as_ref().and_then(|ca| ca.get(i)),
 
                 // Parsing times (HH:MM:SS) into NaiveTime. These are hour from midnight on day,

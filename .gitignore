@@ -1,3 +1,4 @@
 backend
+.env
 server/src/target
 gtfs-parser/src/target

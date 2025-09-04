@@ -7,9 +7,9 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct TripRow {
-    route_id: String,
-    service_id: String,
-    trip_id: String,
+    route_id: Option<String>,
+    service_id: Option<String>,
+    trip_id: Option<String>,
     trip_headsign: Option<String>,
     trip_short_name: Option<String>,
     direction_id: Option<i64>,
@@ -59,9 +59,9 @@ impl TripRow {
         ta: Option<SupportedTransitAuthorities>,
     ) -> Vec<TripRow> {
         let mut struct_vect: Vec<TripRow> = Vec::with_capacity(df.height());
-        let route_id_ca = df.column("route_id").unwrap().str().unwrap();
-        let service_id_ca = df.column("service_id").unwrap().str().unwrap();
-        let trip_id_ca = df.column("trip_id").unwrap().str().unwrap();
+        let route_id_ca = df.column("route_id").ok().and_then(|col| col.str().ok());
+        let service_id_ca = df.column("service_id").ok().and_then(|col| col.str().ok());
+        let trip_id_ca = df.column("trip_id").ok().and_then(|col| col.str().ok());
         let trip_headsign_ca = df
             .column("trip_headsign")
             .ok()
@@ -78,9 +78,15 @@ impl TripRow {
 
         for i in 0..df.height() {
             struct_vect.push(TripRow {
-                route_id: route_id_ca.get(i).unwrap().to_string(),
-                service_id: service_id_ca.get(i).unwrap().to_string(),
-                trip_id: trip_id_ca.get(i).unwrap().to_string(),
+                route_id: route_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
+                service_id: service_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
+                trip_id: trip_id_ca
+                    .as_ref()
+                    .and_then(|ca| ca.get(i).map(|s| s.to_string())),
                 trip_headsign: trip_headsign_ca
                     .as_ref()
                     .and_then(|ca| ca.get(i).map(|s| s.to_string())),
