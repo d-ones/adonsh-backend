@@ -11,7 +11,8 @@ pub struct StopTimeRow {
     arrival_time: Option<NaiveTime>,
     departure_time: Option<NaiveTime>,
     stop_id: String,
-    stop_sequence: u32,
+    // This is a required field for the composite key, but broken somehow
+    stop_sequence: Option<u32>,
     stop_headsign: Option<String>,
     timepoint: Option<u8>,
     transit_authority: Option<SupportedTransitAuthorities>,
@@ -58,8 +59,10 @@ impl StopTimeRow {
 
         let trip_id_ca = df.column("trip_id").unwrap().str().unwrap();
         let stop_id_ca = df.column("stop_id").unwrap().str().unwrap();
-        let stop_sequence_ca = df.column("stop_sequence").unwrap().u32().unwrap();
-
+        let stop_sequence_ca = df
+            .column("stop_sequence")
+            .ok()
+            .and_then(|col| col.u32().ok());
         let arrival_time_ca = df
             .column("arrival_time")
             .ok()
@@ -78,9 +81,10 @@ impl StopTimeRow {
             struct_vect.push(StopTimeRow {
                 trip_id: trip_id_ca.get(i).unwrap().to_string(),
                 stop_id: stop_id_ca.get(i).unwrap().to_string(),
-                stop_sequence: stop_sequence_ca.get(i).unwrap(),
+                stop_sequence: stop_sequence_ca.as_ref().and_then(|ca| ca.get(i)),
 
-                // Parsing times (HH:MM:SS) into NaiveTime
+                // Parsing times (HH:MM:SS) into NaiveTime. These are hour from midnight on day,
+                // eg should be counted as time offsets
                 arrival_time: arrival_time_ca.as_ref().and_then(|ca| {
                     ca.get(i)
                         .and_then(|s| NaiveTime::parse_from_str(s, "%H:%M:%S").ok())
