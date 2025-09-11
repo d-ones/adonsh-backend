@@ -1,0 +1,63 @@
+#![no_std]
+#![no_main]
+extern crate alloc;
+
+use esp_backtrace as _;
+use esp_hal::clock::CpuClock;
+use esp_hal::gpio::{self, OutputConfig};
+use esp_hal::main;
+use esp_hal::spi::master::{Config, Spi};
+use esp_hal::spi::Mode;
+use esp_hal::time::Rate;
+use log::info;
+use smart_leds::{SmartLedsWrite, RGB8};
+use ws2812_spi::Ws2812;
+
+const NUM_LEDS: usize = 3;
+
+const RED: RGB8 = RGB8::new(40, 0, 0);
+const ORANGE: RGB8 = RGB8::new(40, 20, 0);
+const YELLOW: RGB8 = RGB8::new(40, 40, 0);
+const GREEN: RGB8 = RGB8::new(0, 40, 0);
+const CYAN: RGB8 = RGB8::new(0, 40, 40);
+const BLUE: RGB8 = RGB8::new(0, 0, 40);
+const PURPLE: RGB8 = RGB8::new(40, 0, 40);
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
+#[main]
+fn main() -> ! {
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
+
+    esp_println::logger::init_logger_from_env();
+
+    esp_alloc::heap_allocator!(size: 72 * 1024);
+
+    let mut neo_power = esp_hal::gpio::Output::new(
+        peripherals.GPIO21,
+        gpio::Level::High,
+        OutputConfig::default(),
+    );
+    neo_power.set_high();
+
+    let spi_config = Config::default()
+        .with_frequency(Rate::from_mhz(3))
+        .with_mode(Mode::_0);
+
+    let spi = Spi::new(peripherals.SPI2, spi_config)
+        .unwrap()
+        .with_mosi(peripherals.GPIO33);
+
+    let mut ws = Ws2812::new(spi);
+    let colors = [RED, PURPLE, BLUE, CYAN, GREEN, YELLOW, ORANGE];
+    let delay = esp_hal::delay::Delay::new();
+    let mut color_iter = colors.into_iter().cycle();
+    info!("I don't have anything to read this");
+
+    loop {
+        let current_color = color_iter.next().unwrap();
+        ws.write([current_color; NUM_LEDS]).unwrap();
+        delay.delay_millis(750);
+    }
+}
