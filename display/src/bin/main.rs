@@ -2,6 +2,7 @@
 #![no_main]
 extern crate alloc;
 
+use alloc::string::ToString;
 use embedded_graphics::{pixelcolor::Rgb666, prelude::*};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
@@ -54,32 +55,49 @@ fn main() -> ! {
     let dc = Output::new(peripherals.GPIO40, Level::High, OutputConfig::default());
     let cs = Output::new(peripherals.GPIO42, Level::High, OutputConfig::default());
     let mut delay = esp_hal::delay::Delay::new();
-    let mut buffer = [0_u8; 512];
+    let mut buffer = [0_u8; 4096];
     let spi_device = ExclusiveDevice::new_no_delay(spi, cs).unwrap();
     let si = SpiInterface::new(spi_device, dc, &mut buffer);
     let mut display = Builder::new(ST7789, si)
-        .color_order(ColorOrder::Bgr)
+        .color_order(ColorOrder::Rgb)
+        .invert_colors(mipidsi::options::ColorInversion::Inverted)
         .reset_pin(Output::new(
             peripherals.GPIO41,
             Level::High,
             OutputConfig::default(),
         ))
+        .orientation(
+            mipidsi::options::Orientation::default().rotate(mipidsi::options::Rotation::Deg90),
+        )
         .init(&mut delay)
         .unwrap();
+    display.clear(Rgb666::BLACK.into()).unwrap();
     info!("I don't have anything to read this");
-    let text = "Test Output";
+    let mut output = 10;
     let character_style = embedded_graphics::mono_font::MonoTextStyle::new(
-        &embedded_graphics::mono_font::ascii::FONT_6X10,
-        embedded_graphics::pixelcolor::RgbColor::RED,
+        &embedded_graphics::mono_font::ascii::FONT_10X20,
+        embedded_graphics::pixelcolor::RgbColor::BLUE,
     );
-    embedded_graphics::text::Text::with_alignment(
-        text,
-        display.bounding_box().center() + Point::new(0, 15),
-        character_style,
-        embedded_graphics::text::Alignment::Center,
-    )
-    .draw(&mut display)
-    .unwrap();
 
-    loop {}
+    loop {
+        display.clear(Rgb666::BLACK.into()).unwrap();
+
+        let text = output.to_string();
+
+        embedded_graphics::text::Text::with_alignment(
+            &text,
+            display.bounding_box().center(),
+            character_style,
+            embedded_graphics::text::Alignment::Center,
+        )
+        .draw(&mut display)
+        .unwrap();
+
+        output -= 1;
+
+        if output < 0 {
+            output = 10;
+        }
+        delay.delay_millis(1000);
+    }
 }
