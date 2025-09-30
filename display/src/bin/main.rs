@@ -2,8 +2,9 @@
 #![no_main]
 extern crate alloc;
 
+use alloc::string::String;
 use alloc::string::ToString;
-use embedded_graphics::{pixelcolor::Rgb666, prelude::*};
+use embedded_graphics::{pixelcolor::Rgb666, pixelcolor::RgbColor, prelude::*};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
@@ -23,8 +24,6 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-
-    esp_println::logger::init_logger_from_env();
 
     esp_alloc::heap_allocator!(size: 72 * 1024);
 
@@ -73,30 +72,61 @@ fn main() -> ! {
         .unwrap();
     display.clear(Rgb666::BLACK.into()).unwrap();
     info!("I don't have anything to read this");
-    let mut output = 10;
-    let character_style = embedded_graphics::mono_font::MonoTextStyle::new(
+    let train_name = String::from("Test Train\n");
+    let suffix = " minutes";
+    let mut seconds_delta = 500;
+    let mut last_output = String::new();
+    let title_character_style = embedded_graphics::mono_font::MonoTextStyle::new(
         &embedded_graphics::mono_font::ascii::FONT_10X20,
-        embedded_graphics::pixelcolor::RgbColor::BLUE,
+        RgbColor::BLUE,
     );
+    let time_character_style = embedded_graphics::mono_font::MonoTextStyle::new(
+        &embedded_graphics::mono_font::ascii::FONT_10X20,
+        RgbColor::WHITE,
+    );
+    let universal_text_style = embedded_graphics::text::TextStyleBuilder::new()
+        .alignment(embedded_graphics::text::Alignment::Center)
+        .line_height(embedded_graphics::text::LineHeight::Percent(300))
+        .build();
 
     loop {
-        display.clear(Rgb666::BLACK.into()).unwrap();
+        let mins = seconds_delta / 60;
+        let seconds = seconds_delta % 60;
+        let textual_seconds = if seconds > 30 { ".5" } else { "" };
 
-        let text = output.to_string();
+        let text = mins.to_string() + textual_seconds;
 
-        embedded_graphics::text::Text::with_alignment(
-            &text,
-            display.bounding_box().center(),
-            character_style,
-            embedded_graphics::text::Alignment::Center,
-        )
-        .draw(&mut display)
-        .unwrap();
+        let text = text + suffix;
+        if text != last_output {
+            display.clear(Rgb666::BLACK.into()).unwrap();
+            let train = embedded_graphics::text::Text::with_text_style(
+                &train_name,
+                Point::new(
+                    display.bounding_box().center().x,
+                    display.bounding_box().center().y - 50,
+                ),
+                title_character_style,
+                universal_text_style,
+            );
 
-        output -= 1;
+            let time = embedded_graphics::text::Text::with_text_style(
+                &text,
+                display.bounding_box().center(),
+                time_character_style,
+                universal_text_style,
+            );
 
-        if output < 0 {
-            output = 10;
+            time.draw(&mut display).unwrap();
+
+            train.draw(&mut display).unwrap();
+
+            last_output = text.clone();
+        }
+
+        seconds_delta -= 1;
+
+        if seconds_delta < 0 {
+            seconds_delta = 500;
         }
         delay.delay_millis(1000);
     }
