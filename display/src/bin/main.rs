@@ -4,6 +4,7 @@ extern crate alloc;
 
 use alloc::string::String;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 use embedded_graphics::{pixelcolor::Rgb666, pixelcolor::RgbColor, prelude::*};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
@@ -73,27 +74,72 @@ fn main() -> ! {
         .unwrap();
     display.clear(Rgb666::BLACK.into()).unwrap();
     info!("I don't have anything to read this");
-    let train_name = String::from("Test Train\n");
-    let suffix = " minutes";
-    let mut seconds_delta = 500;
+
+    // Static route name for display (will be used to query endpoint)
+    let route_name = String::from("Northbound Express\n");
+
+    // 1. Already ordered Vec of second values for testing -- will come from endpoint
+    let mut seconds_deltas: Vec<i32> = Vec::from([
+        15,  // 0 min 15s
+        120, // 2 min 0s
+        185, // 3 min 5s
+    ]);
+
     let mut last_output = String::new();
     let title_font = FontRenderer::new::<fonts::u8g2_font_helvR18_tr>();
     let time_font = FontRenderer::new::<fonts::u8g2_font_helvB24_tr>();
 
+    title_font
+        .render_aligned(
+            route_name.as_ref(),
+            Point::new(
+                display.bounding_box().center().x,
+                display.bounding_box().center().y - 40,
+            ),
+            u8g2_fonts::types::VerticalPosition::Baseline,
+            u8g2_fonts::types::HorizontalAlignment::Center,
+            u8g2_fonts::types::FontColor::Transparent(RgbColor::BLUE),
+            &mut display,
+        )
+        .unwrap();
+
     loop {
-        let mins = seconds_delta / 60;
-        let seconds = seconds_delta % 60;
-        let textual_seconds = if seconds > 30 { ".5" } else { "" };
+        // Pop if a value is expired and go to the next one
+        if let Some(seconds) = seconds_deltas.first() {
+            if *seconds < 0 {
+                seconds_deltas.remove(0);
+                info!("Train departed, remaining: {} times", seconds_deltas.len());
+            }
+        }
 
-        let text = mins.to_string() + textual_seconds;
+        let seconds_delta = seconds_deltas.first().copied().unwrap_or(0);
 
-        let text = text + suffix;
-        if text != last_output {
-            // TODO -- swap to just resetting bounding box for minutes
+        let (_, final_output) = if seconds_deltas.is_empty() {
+            ("--".to_string(), "--".to_string())
+        } else {
+            let mins = seconds_delta / 60;
+            let seconds = seconds_delta % 60;
+            let textual_seconds = if seconds >= 30 { ".5" } else { "" };
+
+            let suffix = if mins == 1 && seconds < 30 {
+                " minute"
+            } else {
+                " minutes"
+            };
+
+            let text = mins.to_string() + textual_seconds;
+            let final_output = text.clone() + suffix;
+
+            (text, final_output)
+        };
+
+        if final_output != last_output {
+            // TODO only clear the bounding box of the old time text later (WIP).
             display.clear(Rgb666::BLACK.into()).unwrap();
+
             title_font
                 .render_aligned(
-                    train_name.as_ref(),
+                    route_name.as_ref(),
                     Point::new(
                         display.bounding_box().center().x,
                         display.bounding_box().center().y - 40,
@@ -107,7 +153,7 @@ fn main() -> ! {
 
             time_font
                 .render_aligned(
-                    text.as_ref(),
+                    final_output.as_ref(),
                     Point::new(
                         display.bounding_box().center().x,
                         display.bounding_box().center().y + 20,
@@ -119,13 +165,12 @@ fn main() -> ! {
                 )
                 .unwrap();
 
-            last_output = text.clone();
+            last_output = final_output.clone();
         }
 
-        seconds_delta -= 1;
-
-        if seconds_delta < 0 {
-            seconds_delta = 500;
+        // Decrement all the array deltas
+        for seconds in seconds_deltas.iter_mut() {
+            *seconds -= 1;
         }
         delay.delay_millis(1000);
     }
