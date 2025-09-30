@@ -7,15 +7,15 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct TripRow {
-    route_id: Option<String>,
-    service_id: Option<String>,
-    trip_id: Option<String>,
-    trip_headsign: Option<String>,
-    trip_short_name: Option<String>,
-    direction_id: Option<i64>,
-    block_id: Option<String>,
-    transit_authority: Option<SupportedTransitAuthorities>,
-    parse_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub route_id: Option<String>,
+    pub service_id: Option<String>,
+    pub trip_id: Option<String>,
+    pub trip_headsign: Option<String>,
+    pub trip_short_name: Option<String>,
+    pub direction_id: Option<i64>,
+    pub block_id: Option<String>,
+    pub transit_authority: Option<SupportedTransitAuthorities>,
+    pub parse_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl TripRow {

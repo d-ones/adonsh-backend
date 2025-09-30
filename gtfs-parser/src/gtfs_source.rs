@@ -3,7 +3,7 @@ use anyhow::Result;
 use reqwest;
 use std::fs;
 use std::io::{self, Cursor};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use zip::ZipArchive;
 
 pub fn download_and_extract(ta: SupportedTransitAuthorities) -> Result<()> {

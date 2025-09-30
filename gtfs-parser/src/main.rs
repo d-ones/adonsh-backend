@@ -10,7 +10,9 @@ use crate::{
     transit_authorities::SupportedTransitAuthorities,
 };
 
-fn main() -> Result<()> {
+//TODO--actual awaits/threading
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let _ = gtfs_source::download_and_extract(SupportedTransitAuthorities::Boston).unwrap();
     let trip_rows = TripRow::parse_file_into_structs(
         format!(
