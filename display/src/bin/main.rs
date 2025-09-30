@@ -17,6 +17,7 @@ use log::info;
 use mipidsi::interface::SpiInterface; // Provides the builder for DisplayInterface
 use mipidsi::options::ColorOrder;
 use mipidsi::{models::ST7789, Builder};
+use u8g2_fonts::{fonts, FontRenderer};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -76,18 +77,8 @@ fn main() -> ! {
     let suffix = " minutes";
     let mut seconds_delta = 500;
     let mut last_output = String::new();
-    let title_character_style = embedded_graphics::mono_font::MonoTextStyle::new(
-        &embedded_graphics::mono_font::ascii::FONT_10X20,
-        RgbColor::BLUE,
-    );
-    let time_character_style = embedded_graphics::mono_font::MonoTextStyle::new(
-        &embedded_graphics::mono_font::ascii::FONT_10X20,
-        RgbColor::WHITE,
-    );
-    let universal_text_style = embedded_graphics::text::TextStyleBuilder::new()
-        .alignment(embedded_graphics::text::Alignment::Center)
-        .line_height(embedded_graphics::text::LineHeight::Percent(300))
-        .build();
+    let title_font = FontRenderer::new::<fonts::u8g2_font_helvR18_tr>();
+    let time_font = FontRenderer::new::<fonts::u8g2_font_helvB24_tr>();
 
     loop {
         let mins = seconds_delta / 60;
@@ -98,27 +89,35 @@ fn main() -> ! {
 
         let text = text + suffix;
         if text != last_output {
+            // TODO -- swap to just resetting bounding box for minutes
             display.clear(Rgb666::BLACK.into()).unwrap();
-            let train = embedded_graphics::text::Text::with_text_style(
-                &train_name,
-                Point::new(
-                    display.bounding_box().center().x,
-                    display.bounding_box().center().y - 50,
-                ),
-                title_character_style,
-                universal_text_style,
-            );
+            title_font
+                .render_aligned(
+                    train_name.as_ref(),
+                    Point::new(
+                        display.bounding_box().center().x,
+                        display.bounding_box().center().y - 40,
+                    ),
+                    u8g2_fonts::types::VerticalPosition::Baseline,
+                    u8g2_fonts::types::HorizontalAlignment::Center,
+                    u8g2_fonts::types::FontColor::Transparent(RgbColor::BLUE),
+                    &mut display,
+                )
+                .unwrap();
 
-            let time = embedded_graphics::text::Text::with_text_style(
-                &text,
-                display.bounding_box().center(),
-                time_character_style,
-                universal_text_style,
-            );
-
-            time.draw(&mut display).unwrap();
-
-            train.draw(&mut display).unwrap();
+            time_font
+                .render_aligned(
+                    text.as_ref(),
+                    Point::new(
+                        display.bounding_box().center().x,
+                        display.bounding_box().center().y + 20,
+                    ),
+                    u8g2_fonts::types::VerticalPosition::Baseline,
+                    u8g2_fonts::types::HorizontalAlignment::Center,
+                    u8g2_fonts::types::FontColor::Transparent(RgbColor::WHITE),
+                    &mut display,
+                )
+                .unwrap();
 
             last_output = text.clone();
         }
