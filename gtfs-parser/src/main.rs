@@ -3,17 +3,28 @@ mod models;
 mod transit_authorities;
 
 use anyhow::Result;
+use sqlx::PgPool;
+use std::env;
 
 use crate::{
     gtfs_source::*,
+    models::TableRow,
+    models::batch_insert_rows,
     models::{routes::RouteRow, stop_times::StopTimeRow, stops::StopRow, trips::TripRow},
     transit_authorities::SupportedTransitAuthorities,
 };
 
 //TODO--actual awaits/threading
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> Result<()> {
-    let _ = gtfs_source::download_and_extract(SupportedTransitAuthorities::Boston).unwrap();
+    //Pg pool acquisition
+    dotenvy::dotenv().ok();
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let pool = PgPool::connect(&database_url).await?;
+
+    let _ = gtfs_source::download_and_extract(SupportedTransitAuthorities::Boston)
+        .await
+        .unwrap();
     let trip_rows = TripRow::parse_file_into_structs(
         format!(
             "{}{}",
@@ -27,6 +38,11 @@ async fn main() -> Result<()> {
         println!("{:?}", row);
         break;
     }
+    let trip_table_rows: Vec<TableRow> = trip_rows
+        .into_iter()
+        .map(|x| TableRow::TripRow(x))
+        .collect();
+    let _ = batch_insert_rows(trip_table_rows, &pool).await.unwrap();
     let route_rows = RouteRow::parse_file_into_structs(
         format!(
             "{}{}",

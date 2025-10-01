@@ -6,13 +6,12 @@ use std::io::{self, Cursor};
 use std::path::Path;
 use zip::ZipArchive;
 
-pub fn download_and_extract(ta: SupportedTransitAuthorities) -> Result<()> {
+pub async fn download_and_extract(ta: SupportedTransitAuthorities) -> Result<()> {
     let output_path = Path::new(ta.get_static_download_dir());
     fs::create_dir_all(&output_path)?;
 
-    let mut response = reqwest::blocking::get(ta.download_url())?;
-    let mut buffer = Vec::new();
-    response.copy_to(&mut buffer)?;
+    let response = reqwest::get(ta.download_url()).await?;
+    let buffer = response.bytes().await?.to_vec();
     let cursor = Cursor::new(buffer);
     let mut archive = ZipArchive::new(cursor)?;
     for i in 0..archive.len() {
