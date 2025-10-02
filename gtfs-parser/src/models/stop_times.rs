@@ -7,15 +7,15 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct StopTimeRow {
-    trip_id: Option<String>,
-    arrival_time: Option<NaiveTime>,
-    departure_time: Option<NaiveTime>,
-    stop_id: Option<String>,
-    stop_sequence: Option<u32>,
-    stop_headsign: Option<String>,
-    timepoint: Option<u8>,
-    transit_authority: Option<SupportedTransitAuthorities>,
-    parse_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub trip_id: Option<String>,
+    pub arrival_time: Option<NaiveTime>,
+    pub departure_time: Option<NaiveTime>,
+    pub stop_id: Option<String>,
+    pub stop_sequence: Option<u32>,
+    pub stop_headsign: Option<String>,
+    pub timepoint: Option<u8>,
+    pub transit_authority: Option<SupportedTransitAuthorities>,
+    pub parse_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl StopTimeRow {
@@ -41,6 +41,9 @@ impl StopTimeRow {
         let column_param: Option<Arc<[PlSmallStr]>> =
             Some(Arc::new(Self::COLUMNS.map(|s| PlSmallStr::from_str(s))));
 
+        // Provided schema needs to match orignal columns even with selection.
+        // Providing 0 schema length casts all the string performantly and
+        // then we can use our knowledge of GTFS standard to cast all into struct
         Ok(CsvReadOptions::default()
             .with_columns(column_param)
             .with_infer_schema_length(Some(0))

@@ -7,14 +7,14 @@ use crate::transit_authorities::SupportedTransitAuthorities;
 
 #[derive(Debug)]
 pub struct RouteRow {
-    route_id: Option<String>,
-    agency_id: Option<i64>,
-    route_short_name: Option<String>,
-    line_id: Option<String>,
-    listed_route: Option<i64>,
-    network_id: Option<String>,
-    transit_authority: Option<SupportedTransitAuthorities>,
-    parse_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub route_id: Option<String>,
+    pub agency_id: Option<i64>,
+    pub route_short_name: Option<String>,
+    pub line_id: Option<String>,
+    pub listed_route: Option<i64>,
+    pub network_id: Option<String>,
+    pub transit_authority: Option<SupportedTransitAuthorities>,
+    pub parse_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl RouteRow {

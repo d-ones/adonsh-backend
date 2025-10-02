@@ -22,9 +22,13 @@ async fn main() -> Result<()> {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPool::connect(&database_url).await?;
 
+    // Initial ETL
     let _ = gtfs_source::download_and_extract(SupportedTransitAuthorities::Boston)
         .await
         .unwrap();
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
     let trip_rows = TripRow::parse_file_into_structs(
         format!(
             "{}{}",
@@ -43,6 +47,9 @@ async fn main() -> Result<()> {
         .map(|x| TableRow::TripRow(x))
         .collect();
     let _ = batch_insert_rows(trip_table_rows, &pool).await.unwrap();
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
     let route_rows = RouteRow::parse_file_into_structs(
         format!(
             "{}{}",
@@ -56,6 +63,14 @@ async fn main() -> Result<()> {
         println!("{:?}", row);
         break;
     }
+    let route_table_rows: Vec<TableRow> = route_rows
+        .into_iter()
+        .map(|x| TableRow::RouteRow(x))
+        .collect();
+    let _ = batch_insert_rows(route_table_rows, &pool).await.unwrap();
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
     let stop_rows = StopRow::parse_file_into_structs(
         format!(
             "{}{}",
@@ -69,6 +84,14 @@ async fn main() -> Result<()> {
         println!("{:?}", row);
         break;
     }
+    let stop_table_rows: Vec<TableRow> = stop_rows
+        .into_iter()
+        .map(|x| TableRow::StopRow(x))
+        .collect();
+    let _ = batch_insert_rows(stop_table_rows, &pool).await.unwrap();
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
     let stop_time_rows = StopTimeRow::parse_file_into_structs(
         format!(
             "{}{}",
@@ -82,6 +105,14 @@ async fn main() -> Result<()> {
         println!("{:?}", row);
         break;
     }
+    let stop_table_rows: Vec<TableRow> = stop_time_rows
+        .into_iter()
+        .map(|x| TableRow::StopTimeRow(x))
+        .collect();
+    let _ = batch_insert_rows(stop_table_rows, &pool).await.unwrap();
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
     let _ = cleanup_gtfs_files(SupportedTransitAuthorities::Boston).unwrap();
     Ok(())
 }

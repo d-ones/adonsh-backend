@@ -199,6 +199,7 @@ dependencies = [
  "log",
  "mipidsi",
  "smart-leds",
+ "u8g2-fonts",
  "ws2812-spi",
 ]
 
@@ -1247,6 +1248,15 @@ name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
+
+[[package]]
+name = "u8g2-fonts"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825f57be1429fd60f335a4aade11e128a7ae4f89d75ca3a003cb8410a91093f7"
+dependencies = [
+ "embedded-graphics-core",
+]
 
 [[package]]
 name = "ufmt-write"
