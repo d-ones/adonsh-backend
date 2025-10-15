@@ -49,3 +49,20 @@ CREATE table trips (
     parse_date timestamp,
     CONSTRAINT unique_trip_in_authority UNIQUE (trip_id, transit_authority, parse_date)
 );
+
+CREATE table calendar (
+    service_id varchar,
+    monday boolean,
+    tuesday boolean,
+    wednesday boolean,
+    thursday boolean,
+    friday boolean,
+    saturday boolean,
+    sunday boolean,
+    start_date date,
+    end_date date,
+    transit_authority varchar,
+    parse_date timestamp,
+    CONSTRAINT unique_trip_stop_in_authority UNIQUE (service_id, transit_authority, parse_date)
+);
+
