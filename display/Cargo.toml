@@ -1,7 +1,7 @@
 [package]
 edition      = "2021"
 name         = "display"
-rust-version = "1.86"
+rust-version = "1.89"
 version      = "0.1.0"
 
 [[bin]]
@@ -10,7 +10,7 @@ path = "./src/bin/main.rs"
 
 [dependencies]
 esp-bootloader-esp-idf = { version = "0.2.0", features = ["esp32s2"] }
-esp-hal                = { version = "=1.0.0-rc.0", features = ["esp32s2", "unstable"] }
+esp-hal                = { version = "=1.0.0-rc.0", features = ["esp32s2", "unstable", "log-04"] }
 
 esp-backtrace = {version = "0.17.0", features = [
   "esp32s2",
@@ -28,7 +28,11 @@ embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
 embedded-hal-bus = "0.3.0"
 u8g2-fonts = "0.7.2"
-
+xtensa-lx-rt = { version = "0.19.0", features = ["esp32s2"] }
+smoltcp = { version = "0.12.0", default-features=false, features = ["proto-ipv4", "socket-tcp", "socket-icmp", "socket-udp", "medium-ethernet", "proto-dhcpv4", "socket-raw", "socket-dhcpv4"] }
+esp-wifi = { version = "0.15.0", features = ["xtensa-lx-rt", "esp32s2", "wifi", "smoltcp"] }
+blocking-network-stack = { git = "https://github.com/bjoernQ/blocking-network-stack.git", rev = "b3ecefc" }
+embedded-io = "0.6.1"
 
 [profile.dev]
 # Rust debug is too slow.

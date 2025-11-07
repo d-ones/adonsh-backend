@@ -5,22 +5,36 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use embedded_graphics::{pixelcolor::Rgb666, pixelcolor::RgbColor, prelude::*};
+use blocking_network_stack::Stack;
+use core::net::Ipv4Addr;
+use embedded_graphics::primitives::Rectangle;
+use embedded_graphics::{pixelcolor::Rgb565, pixelcolor::RgbColor, prelude::*};
 use embedded_hal_bus::spi::ExclusiveDevice;
+use embedded_io::{Read, Write};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{self, Level, Output, OutputConfig};
 use esp_hal::main;
+use esp_hal::peripherals::{RNG, TIMG0, WIFI};
 use esp_hal::spi::master::{Config, Spi};
 use esp_hal::spi::Mode;
 use esp_hal::time::Rate;
+use esp_hal::{rng::Rng, timer::timg::TimerGroup};
+use esp_wifi::wifi::{ClientConfiguration, Configuration};
 use log::info;
 use mipidsi::interface::SpiInterface; // Provides the builder for DisplayInterface
 use mipidsi::options::ColorOrder;
 use mipidsi::{models::ST7789, Builder};
+use smoltcp::{
+    iface::{SocketSet, SocketStorage},
+    wire::{DhcpOption, IpAddress},
+};
 use u8g2_fonts::{fonts, FontRenderer};
 
 esp_bootloader_esp_idf::esp_app_desc!();
+
+const WIFI_SSID: &str = env!("WIFI_SSID");
+const WIFI_PASS: &str = env!("WIFI_PASS");
 
 #[main]
 fn main() -> ! {
@@ -72,8 +86,8 @@ fn main() -> ! {
         )
         .init(&mut delay)
         .unwrap();
-    display.clear(Rgb666::BLACK.into()).unwrap();
-    info!("I don't have anything to read this");
+
+    display.clear(Rgb565::BLACK.into()).unwrap();
 
     // Static route name for display (will be used to query endpoint)
     let route_name = String::from("Northbound Express\n");
@@ -88,6 +102,40 @@ fn main() -> ! {
     let mut last_output = String::new();
     let title_font = FontRenderer::new::<fonts::u8g2_font_helvR18_tr>();
     let time_font = FontRenderer::new::<fonts::u8g2_font_helvB24_tr>();
+
+    //WiFi setup
+    write_banner(
+        &mut display,
+        &title_font,
+        String::from("Configuring WiFi..."),
+        true,
+    )
+    .unwrap();
+
+    let r = setup_wifi(peripherals.TIMG0, peripherals.RNG, peripherals.WIFI);
+
+    display.clear(Rgb565::BLACK.into()).unwrap();
+
+    if r.is_err() {
+        write_banner(
+            &mut display,
+            &title_font,
+            String::from("Error connecting \n to WiFi"),
+            false,
+        )
+        .unwrap();
+        loop {}
+    };
+
+    write_banner(
+        &mut display,
+        &title_font,
+        String::from("WiFi connected \n successfully"),
+        true,
+    )
+    .unwrap();
+    delay.delay_millis(5000);
+    display.clear(Rgb565::BLACK.into()).unwrap();
 
     title_font
         .render_aligned(
@@ -135,7 +183,7 @@ fn main() -> ! {
 
         if final_output != last_output {
             // TODO only clear the bounding box of the old time text later (WIP).
-            display.clear(Rgb666::BLACK.into()).unwrap();
+            display.clear(Rgb565::BLACK.into()).unwrap();
 
             title_font
                 .render_aligned(
@@ -174,4 +222,161 @@ fn main() -> ! {
         }
         delay.delay_millis(1000);
     }
+}
+
+fn setup_wifi(
+    timg0_periph: TIMG0,
+    rng_periph: RNG,
+    wifi_periph: WIFI,
+) -> Result<(), esp_wifi::wifi::WifiError> {
+    // 1. Initialize the internal ESP-HAL drivers from the raw peripherals.
+    let timg0 = TimerGroup::new(timg0_periph);
+    let rng = Rng::new(rng_periph);
+
+    // 2. Run the core esp-wifi initialization.
+    let init = esp_wifi::init(
+        timg0.timer0, // Pass the TIMER0 driver (moved out of the TimerGroup)
+        rng,          // Pass the RNG driver
+    )
+    .unwrap();
+    let (mut controller, interfaces) = esp_wifi::wifi::new(&init, wifi_periph)?;
+    let mut device = interfaces.sta;
+
+    let iface = smoltcp::iface::Interface::new(
+        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
+            smoltcp::wire::EthernetAddress::from_bytes(&device.mac_address()),
+        )),
+        &mut device,
+        smoltcp::time::Instant::from_micros(
+            esp_hal::time::Instant::now()
+                .duration_since_epoch()
+                .as_micros() as i64,
+        ),
+    );
+
+    let mut socket_set_entries: [SocketStorage; 3] = Default::default();
+    let mut socket_set = SocketSet::new(&mut socket_set_entries[..]);
+    let mut dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
+    dhcp_socket.set_outgoing_options(&[DhcpOption {
+        kind: 12,
+        data: b"esp-radio",
+    }]);
+    socket_set.add(dhcp_socket);
+
+    let now = || {
+        esp_hal::time::Instant::now()
+            .duration_since_epoch()
+            .as_millis()
+    };
+    let seed: u32 = esp_hal::time::Instant::now()
+        .duration_since_epoch()
+        .as_micros() as u32;
+
+    let stack = Stack::new(iface, device, socket_set, now, seed);
+
+    controller
+        .set_power_saving(esp_wifi::config::PowerSaveMode::None)
+        .unwrap();
+
+    let client_config = Configuration::Client({
+        let mut config = ClientConfiguration::default();
+        config.ssid = WIFI_SSID.into();
+        config.password = WIFI_PASS.into();
+        config
+    });
+
+    controller.set_configuration(&client_config).unwrap();
+    controller.start()?;
+    controller.connect()?;
+
+    // Wait for WiFi connection
+    let mut retries = 0;
+    loop {
+        match controller.is_connected() {
+            Ok(true) => break,
+            Ok(false) => {
+                esp_hal::delay::Delay::new().delay_millis(100);
+                retries = retries + 1;
+                // poll for 5 seconds
+                if retries == 50 {
+                    return Err(esp_wifi::wifi::WifiError::NotInitialized);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Wait for network stack to be ready (DHCP)
+    loop {
+        stack.work();
+        if stack.is_iface_up() {
+            break;
+        }
+    }
+
+    // Make HTTP request
+    let mut rx_buffer = [0u8; 1536];
+    let mut tx_buffer = [0u8; 1536];
+    let mut socket = stack.get_socket(&mut rx_buffer, &mut tx_buffer);
+
+    socket.work();
+    socket
+        .open(IpAddress::Ipv4(Ipv4Addr::new(142, 250, 185, 115)), 80)
+        .unwrap();
+    socket
+        .write(b"GET / HTTP/1.0\r\nHost: www.mobile-j.de\r\n\r\n")
+        .unwrap();
+    socket.flush().unwrap();
+
+    let deadline = esp_hal::time::Instant::now()
+        .duration_since_epoch()
+        .as_millis()
+        + 20_000; // 20 seconds in milliseconds
+
+    let mut buffer = [0u8; 512];
+    loop {
+        socket.work();
+        if let Ok(len) = socket.read(&mut buffer) {
+            if len > 0 {
+                // Process response here
+                // let response = core::str::from_utf8(&buffer[..len]);
+            }
+        }
+        if now() > deadline {
+            break;
+        }
+    }
+
+    socket.disconnect();
+    //End WiFi
+
+    Ok(())
+}
+
+fn write_banner<D>(
+    display: &mut D,
+    fr: &FontRenderer,
+    s: String,
+    info: bool,
+) -> Result<
+    Option<Rectangle>,
+    u8g2_fonts::Error<<D as embedded_graphics::draw_target::DrawTarget>::Error>,
+>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    fr.render_aligned(
+        s.as_ref(),
+        Point::new(
+            display.bounding_box().center().x,
+            display.bounding_box().center().y - 40,
+        ),
+        u8g2_fonts::types::VerticalPosition::Baseline,
+        u8g2_fonts::types::HorizontalAlignment::Center,
+        u8g2_fonts::types::FontColor::Transparent(match info {
+            true => RgbColor::BLUE,
+            false => RgbColor::RED,
+        }),
+        display,
+    )
 }
